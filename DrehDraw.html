@@ -1,0 +1,209 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Circular Canvas Drawing</title>
+    <style>
+        body {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            font-family: Arial, sans-serif;
+        }
+        .canvas-container {
+            position: relative;
+            width: 400px;
+            height: 400px;
+        }
+        canvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+            border: 2px solid black;
+            border-radius: 50%;
+        }
+        #overlayCanvas {
+            pointer-events: auto;
+            opacity: 0;
+        }
+        #controls {
+            margin-top: 20px;
+        }
+        #colorPalette {
+            display: flex;
+            gap: 10px;
+            margin-top: 10px;
+        }
+        .color-option {
+            width: 30px;
+            height: 30px;
+            border-radius: 50%;
+            cursor: pointer;
+        }
+    </style>
+</head>
+<body>
+    <div class="canvas-container">
+        <canvas id="mainCanvas" width="400" height="400"></canvas>
+        <canvas id="overlayCanvas" width="400" height="400"></canvas>
+    </div>
+    <div id="controls">
+        <input type="range" id="speedSlider" min="0" max="10" value="1" step="0.1">
+        <label for="speedSlider">Rotation Speed: <span id="speedValue">1.0</span></label>
+        <button id="toggleButton">Start/Stop</button>
+        <div id="colorPalette"></div>
+        <input type="range" id="brushSizeSlider" min="1" max="20" value="5" step="1">
+        <label for="brushSizeSlider">Brush Size: <span id="brushSizeValue">5</span></label>
+    </div>
+
+    <script>
+        const mainCanvas = document.getElementById('mainCanvas');
+        const overlayCanvas = document.getElementById('overlayCanvas');
+        const ctx = mainCanvas.getContext('2d');
+        const overlayCtx = overlayCanvas.getContext('2d');
+        const speedSlider = document.getElementById('speedSlider');
+        const speedValue = document.getElementById('speedValue');
+        const toggleButton = document.getElementById('toggleButton');
+        const colorPalette = document.getElementById('colorPalette');
+        const brushSizeSlider = document.getElementById('brushSizeSlider');
+        const brushSizeValue = document.getElementById('brushSizeValue');
+
+        let isRotating = false;
+        let isDrawing = false;
+        let angle = 0;
+        let speed = 1;
+        let lastX, lastY;
+        let currentColor = 'black';
+        let brushSize = 5;
+
+        const colors = ['black', 'red', 'blue', 'green', 'yellow', 'purple'];
+        colors.forEach(color => {
+            const colorOption = document.createElement('div');
+            colorOption.className = 'color-option';
+            colorOption.style.backgroundColor = color;
+            colorOption.addEventListener('click', () => {
+                currentColor = color;
+                ctx.strokeStyle = color;
+                ctx.fillStyle = color;
+            });
+            colorPalette.appendChild(colorOption);
+        });
+
+        function drawCircle(context) {
+            context.beginPath();
+            context.arc(200, 200, 198, 0, Math.PI * 2);
+            context.stroke();
+        }
+
+        function clearCanvas(context) {
+            context.clearRect(0, 0, mainCanvas.width, mainCanvas.height);
+            drawCircle(context);
+        }
+
+        function rotateCanvas() {
+            const tempCanvas = document.createElement('canvas');
+            tempCanvas.width = mainCanvas.width;
+            tempCanvas.height = mainCanvas.height;
+            const tempCtx = tempCanvas.getContext('2d');
+
+            tempCtx.drawImage(mainCanvas, 0, 0);
+
+            ctx.save();
+            ctx.translate(mainCanvas.width / 2, mainCanvas.height / 2);
+            ctx.rotate(speed * 0.01);
+            ctx.translate(-mainCanvas.width / 2, -mainCanvas.height / 2);
+            ctx.clearRect(0, 0, mainCanvas.width, mainCanvas.height);
+            ctx.drawImage(tempCanvas, 0, 0);
+            ctx.restore();
+
+            if (isRotating) {
+                requestAnimationFrame(rotateCanvas);
+            }
+        }
+
+        function startStopRotation() {
+            isRotating = !isRotating;
+            if (isRotating) {
+                rotateCanvas();
+            }
+        }
+
+        function isInsideCircle(x, y) {
+            const centerX = mainCanvas.width / 2;
+            const centerY = mainCanvas.height / 2;
+            const radius = 198;
+            const distance = Math.sqrt((x - centerX) ** 2 + (y - centerY) ** 2);
+            return distance <= radius;
+        }
+
+        function draw(x, y) {
+            if (!isDrawing) return;
+
+            if (isInsideCircle(x, y)) {
+                ctx.lineWidth = brushSize;
+                ctx.lineCap = 'round';
+                ctx.lineJoin = 'round';
+
+                ctx.beginPath();
+                ctx.moveTo(lastX, lastY);
+                ctx.lineTo(x, y);
+                ctx.stroke();
+
+                lastX = x;
+                lastY = y;
+            }
+        }
+
+        function startDrawing(e) {
+            isDrawing = true;
+            const rect = overlayCanvas.getBoundingClientRect();
+            lastX = e.clientX - rect.left;
+            lastY = e.clientY - rect.top;
+            draw(lastX, lastY);
+        }
+
+        function continueDrawing(e) {
+            if (!isDrawing) return;
+            const rect = overlayCanvas.getBoundingClientRect();
+            const x = e.clientX - rect.left;
+            const y = e.clientY - rect.top;
+            draw(x, y);
+        }
+
+        function stopDrawing() {
+            isDrawing = false;
+        }
+
+        overlayCanvas.addEventListener('mousedown', startDrawing);
+        overlayCanvas.addEventListener('mousemove', continueDrawing);
+        overlayCanvas.addEventListener('mouseup', stopDrawing);
+        overlayCanvas.addEventListener('mouseout', stopDrawing);
+
+        // Continuous drawing even without mouse movement
+        setInterval(() => {
+            if (isDrawing) {
+                draw(lastX, lastY);
+            }
+        }, 10);
+
+        speedSlider.addEventListener('input', () => {
+            speed = parseFloat(speedSlider.value);
+            speedValue.textContent = speed.toFixed(1);
+        });
+
+        brushSizeSlider.addEventListener('input', () => {
+            brushSize = parseInt(brushSizeSlider.value);
+            brushSizeValue.textContent = brushSize;
+        });
+
+        toggleButton.addEventListener('click', startStopRotation);
+
+        clearCanvas(ctx);
+        drawCircle(ctx);
+
+        ctx.strokeStyle = currentColor;
+        ctx.fillStyle = currentColor;
+    </script>
+</body>
+</html>
